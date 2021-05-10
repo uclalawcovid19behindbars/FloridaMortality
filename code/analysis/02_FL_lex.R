@@ -5,6 +5,7 @@ library(lubridate)
 library(tidyverse)
 library(behindbarstools)
 
+# read in death data
 death_df <- "./data/cleaned/FL_death_roster_historical_by_FLDHS.csv" %>%
     read_csv() %>%
     mutate(Age_Group = ifelse(Age_Group == "85+", "75-84", Age_Group)) %>%
@@ -15,6 +16,7 @@ death_df <- "./data/cleaned/FL_death_roster_historical_by_FLDHS.csv" %>%
     select(Date, Age_Group, Deaths) %>%
     filter(year(Date) < 2021)
 
+# read in pop data
 pop_df <- "./data/cleaned/21.3.6_fl_agg_new_cat_(2000-2021).csv" %>%
     read_csv(col_types = cols()) %>%
     mutate(Age_Group = ifelse(Age_Group == "75-85", "75-84", Age_Group)) %>%
@@ -26,6 +28,7 @@ pop_df <- "./data/cleaned/21.3.6_fl_agg_new_cat_(2000-2021).csv" %>%
     filter(year(Date) < 2021) %>%
     filter(!(Age_Group %in% c("10-14", "15-19")))
 
+# combine the data together
 agg_mx_df <- pop_df %>%
     left_join(death_df, by = c("Date", "Age_Group")) %>%
     mutate(Deaths = ifelse(is.na(Deaths), 0, Deaths)) %>%
@@ -51,6 +54,7 @@ agg_mx_df %>%
     scale_fill_bbdiscrete() +
     labs(fill = "Age Group", color = "Age Group", y = "Mortality Rate")
 
+# calculate raw rate df
 rate_df <- agg_mx_df %>%
     mutate(Year = year(Date)) %>%
     select(Year, Population, Deaths) %>%
@@ -60,6 +64,8 @@ rate_df <- agg_mx_df %>%
 
 rate_df
 
+# create an individual level data set where person months are
+# the rows
 ind_mx_df <- bind_rows(lapply(1:nrow(agg_mx_df), function(i){
     tibble(
         Death = c(
@@ -71,8 +77,11 @@ ind_mx_df <- bind_rows(lapply(1:nrow(agg_mx_df), function(i){
 n_age <- length(unique(agg_mx_df$Age_Group))
 person_years <- nrow(ind_mx_df)
 
-sims <- 1000
+# define the number of simulations you could like to do for the analysis
+sims <- 10000
 
+# run teh boot strapped simulation life tables
+# this takes a while!!!!!
 set.seed(123)
 bs_lx_df <- bind_rows(mclapply(1:sims, function(j){
 
@@ -102,6 +111,8 @@ bs_lx_df <- bind_rows(mclapply(1:sims, function(j){
         mutate(sim = j)
 }, mc.cores = 10))
 
+
+# make all the plots
 bs_lx_df %>%
     filter(Age_Group == "20-24") %>%
     group_by(Age_Group, Year) %>%

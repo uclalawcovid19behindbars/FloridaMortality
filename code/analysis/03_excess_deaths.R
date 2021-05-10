@@ -7,9 +7,12 @@ library(behindbarstools)
 library(plotly)
 library(INLA)
 
+# read in aggregated mortality data
 agg_mx_df <- read_csv("data/cleaned/agg_mx_df.csv") %>%
     mutate(N = as.numeric(as.factor(as.character(Date))))
 
+# run through summed auto-correlation function
+# there seems to be significant auto-correlation but no seasonal trends
 agg_mx_df %>%
     select(Date, Population, Deaths) %>%
     group_by(Date) %>%
@@ -18,6 +21,7 @@ agg_mx_df %>%
     pull(Rate) %>%
     acf()
 
+# look at annual death rates
 agg_mx_df %>%
     mutate(Year = year(Date)) %>%
     select(Year, Deaths, Population) %>%
@@ -26,6 +30,7 @@ agg_mx_df %>%
     mutate(Population = Population/12) %>%
     mutate(Rate = (Deaths / Population)*100000)
 
+# check out monthly population changes
 agg_mx_df %>%
     group_by(Date) %>%
     summarize(Population = sum(Population)) %>%
@@ -40,6 +45,7 @@ agg_mx_df %>%
     ylab("Population") +
     scale_y_continuous(label=scales::comma, limits = c(80000, 100000))
 
+# covid death load from behindbars
 covid_deaths <- calc_aggregate_counts(
     state = TRUE, all_dates = TRUE, week_grouping = FALSE) %>%
     filter(State == "Florida" & Measure == "Residents.Deaths") %>%
@@ -48,6 +54,7 @@ covid_deaths <- calc_aggregate_counts(
     mutate(Covid.Deaths = UCLA - lag(UCLA, default = 0)) %>%
     select(Date, Covid.Deaths)
 
+# check out the deaths across months
 covid_deaths %>%
     mutate(Name = "") %>%
     filter(Date < ymd("2021-01-01")) %>%
@@ -58,6 +65,7 @@ covid_deaths %>%
     labs(y = "COVID Deaths\nin FL Prisons") +
     theme(legend.position = "none")
 
+# run the bayesian hierarchical models by age group
 pred_df <- bind_rows(lapply(unique(agg_mx_df$Age_Group), function(a){
 
     agg_mx_df %>%
@@ -75,6 +83,8 @@ pred_df <- bind_rows(lapply(unique(agg_mx_df$Age_Group), function(a){
         mutate(N=1:n(), Age_Group = a)
 }))
 
+
+# combine prediction with observed data
 ex_df <- pred_df %>%
     pivot_longer(mu:upr) %>%
     left_join(agg_mx_df, by = c("Age_Group", "N")) %>%
@@ -100,7 +110,7 @@ ex_df %>%
     filter(Date >= ymd("2020-03-01")) %>%
     summarise_if(is.numeric, sum)
 
-
+# run through plots of observed, expected, and covid deaths
 bind_rows(
     ex_df %>%
         select(name, Expected, Date) %>%
