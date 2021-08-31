@@ -8,6 +8,26 @@ sa_gen_lx_df <- read_rds("data/results/sa_gen_lx_df.rds") %>%
 lx_df <- read_rds("data/results/lx_df.rds") %>%
     mutate(Group = "FLDOC")
 
+# covid ratio with true sex adjustment just for sanity check
+bind_rows(
+    lx_df %>%
+        filter(Year == 2020) %>%
+        mutate(cqx = COVID.Deaths/Population) %>%
+        mutate(PW = Population/sum(Population)) %>%
+        summarize(casmr = sum(cqx * PW)) %>%
+        mutate(Group = "FLDOC"),
+
+    read_rds("data/results/gen_lx_df.rds") %>%
+        filter(Year == 2020) %>%
+        mutate(cqx = COVID.Deaths/Population) %>%
+        select(Age_Group, Sex, cqx) %>%
+        left_join(
+            read_rds("data/results/age_sex_pw.rds"),
+            by = c("Age_Group", "Sex")) %>%
+        summarize(casmr = sum(cqx * PW)) %>%
+        mutate(Group = "Florida State")) %>%
+    mutate(RR = lag(casmr) / casmr)
+
 # make sure the Death totals look reasonable
 lx_df %>%
     group_by(Year) %>%

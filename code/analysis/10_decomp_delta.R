@@ -16,6 +16,20 @@ death_df <- "./data/cleaned/FL_death_roster_historical_by_FLDHS.csv" %>%
     select(Date, Age_Group, Deaths) %>%
     filter(year(Date) < 2021)
 
+sex_weight_df <- "./data/cleaned/21.3.6_fl_agg_new_cat_(2000-2021).csv" %>%
+    read_csv(col_types = cols()) %>%
+    mutate(Age_Group = ifelse(Age_Group == "75-85", "75+", Age_Group)) %>%
+    mutate(Age_Group = ifelse(Age_Group == "85+", "75+", Age_Group)) %>%
+    rename(Date = Anchor_Date) %>%
+    mutate(Sex = str_to_title(Sex)) %>%
+    group_by(Age_Group, Sex, Date) %>%
+    summarize(Population = sum(Total, na.rm = TRUE), .groups = "drop_last") %>%
+    filter(year(Date) == 2020) %>%
+    filter(Age_Group != "15-19") %>%
+    summarize(Population = sum(Population)/12, .groups = "drop") %>%
+    mutate(PW = Population / sum(Population)) %>%
+    select(-Population)
+
 # read in pop data
 pop_df <- "./data/cleaned/21.3.6_fl_agg_new_cat_(2000-2021).csv" %>%
     read_csv(col_types = cols()) %>%
@@ -45,12 +59,6 @@ pop_df %>%
     filter(Date == ymd("2019-01-01") | Date == ymd("2020-12-01")) %>%
     group_by(Age_Group) %>%
     summarise(delta = diff(Population))
-
-# pull in a vector of COVID deaths for 2020 extracted from medical records
-covid_vec <- read_csv("./data/cleaned/covid_deaths.csv", col_types = cols()) %>%
-    pull(Covid.Deaths) %>%
-    # youngest age group had no COVID deaths so add in 0 to the front
-    {c(0, .)}
 
 # read in the medical examiner records
 covid_deaths <- "./data/raw/" %>%
@@ -170,3 +178,4 @@ cause_effect %>%
 write_rds(cause_effect, "data/results/cause_effect.rds")
 write_rds(decomp_age_df, "data/results/decomp_age.rds")
 write_rds(lx_df, "data/results/lx_df.rds")
+write_rds(sex_weight_df, "data/results/age_sex_pw.rds")
